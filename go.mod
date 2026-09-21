@@ -6,3 +6,5 @@ require (
 	github.com/DDP-Projekt/Kompilierer v1.0.0
 	github.com/aymanbagabas/go-udiff v0.4.1
 )
+
+replace github.com/DDP-Projekt/Kompilierer => /home/leon/repos/Kompilierer

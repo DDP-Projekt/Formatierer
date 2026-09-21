@@ -1,10 +1,10 @@
 package formatierer
 
-
 import (
 	"strconv"
 	"strings"
 	"unicode"
+
 	"github.com/DDP-Projekt/Kompilierer/src/ast"
 	"github.com/DDP-Projekt/Kompilierer/src/ddptypes"
 	"github.com/DDP-Projekt/Kompilierer/src/token"
@@ -16,7 +16,7 @@ type FormattingOptions struct {
 
 type formattingVisitor struct {
 	document        string
-	opts          FormattingOptions
+	opts            FormattingOptions
 	out             strings.Builder
 	indent          int
 	currentPos      token.Position
@@ -151,7 +151,7 @@ func (v *formattingVisitor) writeAliasCall(tokens []token.Token, args map[string
 }
 
 func (v *formattingVisitor) VisitBadDecl(decl *ast.BadDecl) ast.VisitResult {
-	//log.Infof(fmt.Sprintf("BadDecl[%s]", &decl.Tok))
+	v.write(decl.Tok.Literal)
 	v.advanceTo(decl.GetRange().End)
 	return ast.VisitRecurse
 }
@@ -500,7 +500,7 @@ func (v *formattingVisitor) VisitTypeDefDecl(decl *ast.TypeDefDecl) ast.VisitRes
 }
 
 func (v *formattingVisitor) VisitBadExpr(expr *ast.BadExpr) ast.VisitResult {
-	//log.Infof(fmt.Sprintf("BadExpr[%s]", &expr.Tok))
+	v.write(expr.Tok.Literal)
 	v.advanceTo(expr.GetRange().End)
 	return ast.VisitRecurse
 }
@@ -838,7 +838,7 @@ func (v *formattingVisitor) VisitStructLiteral(expr *ast.StructLiteral) ast.Visi
 }
 
 func (v *formattingVisitor) VisitBadStmt(stmt *ast.BadStmt) ast.VisitResult {
-	//log.Infof(fmt.Sprintf("BadStmt[%s]", &stmt.Tok))
+	v.write(stmt.Tok.Literal)
 	v.advanceTo(stmt.GetRange().End)
 	return ast.VisitRecurse
 }
@@ -851,7 +851,9 @@ func (v *formattingVisitor) VisitDeclStmt(stmt *ast.DeclStmt) ast.VisitResult {
 
 func (v *formattingVisitor) VisitExprStmt(stmt *ast.ExprStmt) ast.VisitResult {
 	stmt.Expr.Accept(v)
-	v.write(".")
+	if _, isBad := stmt.Expr.(*ast.BadExpr); !isBad {
+		v.write(".")
+	}
 	v.advanceTo(stmt.GetRange().End)
 	return ast.VisitRecurse
 }
@@ -898,14 +900,12 @@ func (v *formattingVisitor) litAssign(stmt *ast.AssignStmt) {
 	v.write("ist")
 	v.space()
 	stmt.Rhs.Accept(v)
-	v.write(".")
 }
 
 func (v *formattingVisitor) negateAssign(stmt *ast.AssignStmt) {
 	v.write("Negiere")
 	v.space()
 	stmt.Var.Accept(v)
-	v.write(".")
 }
 
 func (v *formattingVisitor) compoundAssign(stmt *ast.AssignStmt, operator ast.BinaryOperator, other ast.Expression) {
@@ -931,7 +931,6 @@ func (v *formattingVisitor) compoundAssign(stmt *ast.AssignStmt, operator ast.Bi
 		}
 		v.space()
 		other.Accept(v)
-		v.write(".")
 	case ast.BIN_LEFT_SHIFT, ast.BIN_RIGHT_SHIFT:
 		v.write("Verschiebe")
 		v.space()
@@ -942,11 +941,10 @@ func (v *formattingVisitor) compoundAssign(stmt *ast.AssignStmt, operator ast.Bi
 		other.Accept(v)
 		v.space()
 		if operator == ast.BIN_LEFT_SHIFT {
-			v.write("Bit nach Links")
+			v.write("Bit nach links")
 		} else {
-			v.write("Bit nach Rechts")
+			v.write("Bit nach rechts")
 		}
-		v.write(".")
 	}
 }
 
@@ -958,45 +956,48 @@ func (v *formattingVisitor) normalAssign(stmt *ast.AssignStmt) {
 	v.write("in")
 	v.space()
 	stmt.Var.Accept(v)
-	v.write(".")
 }
 
-func (v *formattingVisitor) VisitAssignStmt(stmt *ast.AssignStmt) ast.VisitResult {
+func (v *formattingVisitor) assign(stmt *ast.AssignStmt, inWhile bool) {
 	switch stmt.Var.(type) {
 	case *ast.CastAssigneable, *ast.FieldAccess:
-		break
+		v.normalAssign(stmt)
 	default:
 		switch rhs := stmt.Rhs.(type) {
 		case ast.Literal:
 			if stmt.Tok.Type == token.SPEICHERE {
-				break
+				v.normalAssign(stmt)
+			} else {
+				v.litAssign(stmt)
 			}
-			v.litAssign(stmt)
-			v.advanceTo(stmt.GetRange().End)
-			return ast.VisitRecurse
 
 		case *ast.UnaryExpr:
 			if rhs.Operator == ast.UN_NOT || rhs.Operator == ast.UN_NEGATE {
 				v.negateAssign(stmt)
-				v.advanceTo(stmt.GetRange().End)
-				return ast.VisitRecurse
 			}
 
 		case *ast.BinaryExpr:
 			switch stmt.Var {
 			case rhs.Lhs:
 				v.compoundAssign(stmt, rhs.Operator, rhs.Rhs)
-				v.advanceTo(stmt.GetRange().End)
-				return ast.VisitRecurse
 			case rhs.Rhs:
 				v.compoundAssign(stmt, rhs.Operator, rhs.Lhs)
-				v.advanceTo(stmt.GetRange().End)
-				return ast.VisitRecurse
+			default:
+				v.normalAssign(stmt)
 			}
+
+		default:
+			v.normalAssign(stmt)
 		}
 	}
 
-	v.normalAssign(stmt)
+	if !inWhile {
+		v.write(".")
+	}
+}
+
+func (v *formattingVisitor) VisitAssignStmt(stmt *ast.AssignStmt) ast.VisitResult {
+	v.assign(stmt, false)
 
 	v.advanceTo(stmt.GetRange().End)
 	return ast.VisitRecurse
@@ -1083,9 +1084,16 @@ func (v *formattingVisitor) VisitWhileStmt(stmt *ast.WhileStmt) ast.VisitResult 
 			stmt.Body.Accept(v)
 			v.newline()
 			stmt.Condition.Accept(v)
-			v.write(" Mal.")
+			v.space()
+			v.write("Mal.")
 		case *ast.ExprStmt:
 			body.Expr.Accept(v)
+			v.space()
+			stmt.Condition.Accept(v)
+			v.space()
+			v.write("Mal.")
+		case *ast.AssignStmt:
+			v.assign(body, true)
 			v.space()
 			stmt.Condition.Accept(v)
 			v.space()
@@ -1200,11 +1208,11 @@ func (v *formattingVisitor) VisitTodoStmt(stmt *ast.TodoStmt) ast.VisitResult {
 func (v *formattingVisitor) getRangeText(rang token.Range) string {
 	rang = token.Range{
 		Start: token.Position{
-			Line:      uint(rang.Start.Line - 1),
+			Line:   uint(rang.Start.Line - 1),
 			Column: uint(rang.Start.Column - 1),
 		},
 		End: token.Position{
-			Line:      uint(rang.End.Line - 1),
+			Line:   uint(rang.End.Line - 1),
 			Column: uint(rang.End.Column - 1),
 		},
 	}

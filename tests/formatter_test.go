@@ -54,7 +54,7 @@ func writeModule(t *testing.T, relPath, content string) {
 
 // parses and formats source, so that checkResult can compare against the output.
 // The source must be valid DDP, otherwise the test fails.
-func setTest(t *testing.T, source string) {
+func setTestImpl(t *testing.T, source string, checkErrs bool) {
 	t.Helper()
 
 	path := filepath.Join(testDir(t), "test.ddp")
@@ -70,9 +70,11 @@ func setTest(t *testing.T, source string) {
 	if err != nil {
 		t.Fatalf("parsing test source: %v", err)
 	}
-	for _, e := range errs {
-		if e.Level == ddperror.LEVEL_ERROR {
-			t.Errorf("test source is invalid at %s: %s", e.Range.Start, e.Msg)
+	if (checkErrs) {
+		for _, e := range errs {
+			if e.Level == ddperror.LEVEL_ERROR {
+				t.Errorf("test source is invalid at %s: %s", e.Range.Start, e.Msg)
+			}
 		}
 	}
 	if t.Failed() {
@@ -93,6 +95,14 @@ func setTest(t *testing.T, source string) {
 	})
 }
 
+func setTest(t *testing.T, source string) {
+	setTestImpl(t, source, true)
+}
+
+func setTestUnchecked(t *testing.T, source string) {
+	setTestImpl(t, source, false)
+}
+
 // asserts that the formatter produced exactly expected for the source given to setTest
 func checkResult(t *testing.T, expected string) {
 	t.Helper()
@@ -107,6 +117,28 @@ func checkResult(t *testing.T, expected string) {
 	if got != expected {
 		t.Errorf("formatted output differs from expected:\n%s", udiff.Unified("expected", "got", expected, got))
 	}
+}
+
+/*
+	Bad
+*/
+
+func TestBadExpr(t *testing.T) {
+	src := `2 um 5 Bit nach x`
+	setTestUnchecked(t, src)
+	checkResult(t, src)
+}
+
+func TestBadStmt(t *testing.T) {
+	src := `Binde`
+	setTestUnchecked(t, src)
+	checkResult(t, src)
+}
+
+func TestBadDecl(t *testing.T) {
+	src := `Die aowidh`
+	setTestUnchecked(t, src)
+	checkResult(t, src)
 }
 
 /*
@@ -738,14 +770,24 @@ z ist 50.`
 
 func TestSpeichereAssign(t *testing.T) {
 	src := `Die Zahl z ist 42.
-Speichere z plus 8 in z.`
+Speichere z plus 8 in z.
+Speichere (z plus 8) in z.`
 	setTest(t, src)
 	checkResult(t, src)
 }
 
 func TestIndexAssign(t *testing.T) {
 	src := `Die Text Liste tl ist eine Liste, die aus "a", "b" besteht.
+tl an der Stelle 1 ist "A".
 tl an der Stelle 1 ist "A".`
+	setTest(t, src)
+	checkResult(t, src)
+}
+
+func TestSpeichereIndexAssign(t *testing.T) {
+	src := `Die Zahlen Liste l ist eine leere Zahlen Liste.
+Speichere 5 in (l an der Stelle 1).
+Speichere 5 in (l an der Stelle 1).`
 	setTest(t, src)
 	checkResult(t, src)
 }
@@ -819,14 +861,14 @@ Teile k durch 2.`
 
 func TestCompoundAssignShiftLeft(t *testing.T) {
 	src := `Die Zahl z ist 42.
-Verschiebe z um 1 Bit nach Links.`
+Verschiebe z um 1 Bit nach links.`
 	setTest(t, src)
 	checkResult(t, src)
 }
 
 func TestCompoundAssignShiftRight(t *testing.T) {
 	src := `Die Zahl z ist 42.
-Verschiebe z um 1 Bit nach Rechts.`
+Verschiebe z um 1 Bit nach rechts.`
 	setTest(t, src)
 	checkResult(t, src)
 }
@@ -1294,7 +1336,7 @@ Wiederhole:
 	checkResult(t, src)
 }
 
-func TestRepeatSingleStmt(t *testing.T) {
+func TestRepeatSingleCallStmt(t *testing.T) {
 	src := `Die Funktion Erhoehen mit dem Parameter r vom Typ Zahlen Referenz, gibt nichts zurück, macht:
 	Speichere r plus 1 in r.
 Und kann so benutzt werden:
@@ -1302,6 +1344,36 @@ Und kann so benutzt werden:
 
 Die Zahl i ist 0.
 inkrementiere i 3 Mal.`
+	setTest(t, src)
+	checkResult(t, src)
+}
+
+func TestRepeatSingleExprStmt(t *testing.T) {
+	src := `1 3 Mal.`
+	setTest(t, src)
+	checkResult(t, src)
+}
+
+func TestRepeatSingleAssignStmt(t *testing.T) {
+	src := `Die Zahl x ist 1.
+Speichere x plus 1 in x 4 Mal.`
+	setTest(t, src)
+	checkResult(t, src)
+}
+
+func TestRepeatSingleAssignLitStmt(t *testing.T) {
+	src := `Die Zahl x ist 1.
+x ist 5 4 Mal.`
+	setTest(t, src)
+	checkResult(t, src)
+}
+
+func TestRepeatSingleCompoundAssignStmt(t *testing.T) {
+	src := `Die Zahl x ist 1.
+Erhöhe x um 5 4 Mal.
+Verringere x um 5 4 Mal.
+Vervielfache x um 5 4 Mal.
+Teile x durch 5 4 Mal.`
 	setTest(t, src)
 	checkResult(t, src)
 }
