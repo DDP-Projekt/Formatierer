@@ -1,6 +1,7 @@
 package formatierer
 
 import (
+	"bufio"
 	"strconv"
 	"strings"
 	"unicode"
@@ -17,7 +18,7 @@ type FormattingOptions struct {
 type formattingVisitor struct {
 	document        string
 	opts            FormattingOptions
-	out             strings.Builder
+	out             *bufio.Writer
 	indent          int
 	currentPos      token.Position
 	nextLetterLower bool
@@ -37,7 +38,7 @@ func (v *formattingVisitor) write(s string) {
 
 func (v *formattingVisitor) writeIndent() {
 	for range v.indent {
-		if v.opts.InsertSpaces == true {
+		if v.opts.InsertSpaces {
 			v.out.WriteString("    ")
 		} else {
 			v.out.WriteString("\t")
