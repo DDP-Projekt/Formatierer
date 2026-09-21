@@ -1,6 +1,9 @@
+// Package formatierer exposes functions to formated pre-parsed DDP modules
 package formatierer
 
 import (
+	"bufio"
+	"io"
 	"strings"
 	"unicode/utf8"
 
@@ -8,11 +11,12 @@ import (
 	"github.com/DDP-Projekt/Kompilierer/src/token"
 )
 
-func GetFormattedDocument(document string, module ast.Module, options FormattingOptions) string {
+func WriteFormattedDocument(w io.Writer, document string, module *ast.Module, options FormattingOptions) error {
 	visitor := &formattingVisitor{
 		document:   document,
 		currentPos: token.Position{Line: 1, Column: 1},
 		opts:       options,
+		out:        bufio.NewWriter(w),
 	}
 	statements := module.Ast.Statements
 
@@ -42,5 +46,11 @@ func GetFormattedDocument(document string, module ast.Module, options Formatting
 	})
 	visitor.write(between)
 
-	return visitor.out.String()
+	return visitor.out.Flush()
+}
+
+func GetFormattedDocument(document string, module *ast.Module, options FormattingOptions) (string, error) {
+	b := strings.Builder{}
+	err := WriteFormattedDocument(&b, document, module, options)
+	return b.String(), err
 }

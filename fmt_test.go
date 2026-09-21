@@ -1,4 +1,4 @@
-package tests
+package formatierer
 
 import (
 	"os"
@@ -6,7 +6,6 @@ import (
 	"sync"
 	"testing"
 
-	formatierer "github.com/DDP-Projekt/Formatierer"
 	"github.com/DDP-Projekt/Kompilierer/src/ddperror"
 	"github.com/DDP-Projekt/Kompilierer/src/parser"
 	"github.com/aymanbagabas/go-udiff"
@@ -44,10 +43,10 @@ func testDir(t *testing.T) string {
 func writeModule(t *testing.T, relPath, content string) {
 	t.Helper()
 	path := filepath.Join(testDir(t), relPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -70,7 +69,7 @@ func setTestImpl(t *testing.T, source string, checkErrs bool) {
 	if err != nil {
 		t.Fatalf("parsing test source: %v", err)
 	}
-	if (checkErrs) {
+	if checkErrs {
 		for _, e := range errs {
 			if e.Level == ddperror.LEVEL_ERROR {
 				t.Errorf("test source is invalid at %s: %s", e.Range.Start, e.Msg)
@@ -81,9 +80,12 @@ func setTestImpl(t *testing.T, source string, checkErrs bool) {
 		t.FailNow()
 	}
 
-	formatted := formatierer.GetFormattedDocument(source, *module, formatierer.FormattingOptions{
+	formatted, err := GetFormattedDocument(source, module, FormattingOptions{
 		InsertSpaces: false,
 	})
+	if err != nil {
+		t.Errorf("error formatting: %s", err)
+	}
 
 	stateMu.Lock()
 	defer stateMu.Unlock()
