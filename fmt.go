@@ -2,7 +2,6 @@
 package formatierer
 
 import (
-	"bufio"
 	"io"
 	"strings"
 	"unicode/utf8"
@@ -12,12 +11,7 @@ import (
 )
 
 func WriteFormattedDocument(w io.Writer, document string, module *ast.Module, options FormattingOptions) error {
-	visitor := &formattingVisitor{
-		document:   document,
-		currentPos: token.Position{Line: 1, Column: 1},
-		opts:       options,
-		out:        bufio.NewWriter(w),
-	}
+	visitor := newFormattingVisitor(w, document, options)
 	statements := module.Ast.Statements
 
 	for _, stmt := range statements {
@@ -28,13 +22,13 @@ func WriteFormattedDocument(w io.Writer, document string, module *ast.Module, op
 		})
 
 		visitor.write(between)
-		//log.Infof(between)
-		//log.Infof(visitor.currentPos.String())
+		// log.Infof(between)
+		// log.Infof(visitor.currentPos.String())
 
 		stmt.Accept(visitor)
 	}
 
-	//log.Infof(visitor.currentPos.String())
+	// log.Infof(visitor.currentPos.String())
 	lines := strings.Split(document, "\n")
 
 	between := visitor.getRangeText(token.Range{

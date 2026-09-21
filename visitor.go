@@ -2,8 +2,10 @@ package formatierer
 
 import (
 	"bufio"
+	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/DDP-Projekt/Kompilierer/src/ast"
@@ -16,12 +18,24 @@ type FormattingOptions struct {
 }
 
 type formattingVisitor struct {
-	document        string
+	documentLines   func() []string
 	opts            FormattingOptions
 	out             *bufio.Writer
 	indent          int
 	currentPos      token.Position
 	nextLetterLower bool
+}
+
+func newFormattingVisitor(w io.Writer, document string, opts FormattingOptions) *formattingVisitor {
+	return &formattingVisitor{
+		documentLines: sync.OnceValue(func() []string {
+			lines := strings.Split(document, "\n")
+			return lines
+		}),
+		currentPos: token.Position{Line: 1, Column: 1},
+		opts:       opts,
+		out:        bufio.NewWriter(w),
+	}
 }
 
 func (*formattingVisitor) Visitor() {}
@@ -52,7 +66,7 @@ func (v *formattingVisitor) space() {
 
 func (v *formattingVisitor) advanceTo(pos token.Position) {
 	v.currentPos = pos
-	//log.Infof("%v", v.getRangeText(token.Range{Start: token.Position{0, 0}, End: pos}))
+	// log.Infof("%v", v.getRangeText(token.Range{Start: token.Position{0, 0}, End: pos}))
 }
 
 // writes a newline followed by the current indentation
@@ -1218,7 +1232,7 @@ func (v *formattingVisitor) getRangeText(rang token.Range) string {
 		},
 	}
 
-	lines := strings.Split(v.document, "\n")
+	lines := v.documentLines()
 
 	if rang.Start.Line == rang.End.Line {
 		line := []rune(lines[rang.Start.Line])
